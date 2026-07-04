@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChatInput,
   ChatWindow,
-  CrawlBar,
+  SiteManager,
   Header,
 } from "../components/chat/ChatUI";
 import { useChat } from "../api-hooks/chat";
-import { useCrawl } from "../api-hooks/crawl";
+import {
+  useIndexSite,
+  useRemoveSite,
+  useGetSites,
+} from "../api-hooks/crawl";
 
 export default function ChattingPage() {
-  const [url, setUrl] = useState("https://example.com");  
-  const [siteId, setSiteId] = useState("");
+  const queryClient = useQueryClient();
+  const [url, setUrl] = useState("https://example.com");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -20,7 +25,11 @@ export default function ChattingPage() {
     progress: 0,
   });
 
-  const crawlMutation = useCrawl();
+  const { data: sitesData } = useGetSites();
+  const sites = sitesData?.data || [];
+
+  const indexMutation = useIndexSite();
+  const removeMutation = useRemoveSite();
   const chatMutation = useChat();
 
   useEffect(() => {
@@ -29,17 +38,12 @@ export default function ChattingPage() {
     const timer = setInterval(() => {
       setIndexing((prev) => {
         if (prev.progress >= 99) return prev;
-
-        let increment;
-
-        if (prev.progress < 50) {
-          increment = Math.random() * 5 + 4;
-        } else if (prev.progress < 80) {
-          increment = Math.random() * 1.5 + 1;
-        } else {
-          increment = Math.random() * 0.3 + 0.1; 
-        }
-
+        let increment =
+          prev.progress < 50
+            ? Math.random() * 5 + 4
+            : prev.progress < 80
+            ? Math.random() * 1.5 + 1
+            : Math.random() * 0.3 + 0.1;
         return {
           ...prev,
           progress: Math.min(99, prev.progress + increment),
@@ -53,52 +57,40 @@ export default function ChattingPage() {
   const inputPlaceholder = useMemo(() => {
     if (indexing.status === "running")
       return "Indexing in progress — please wait…";
+    if (sites.length === 0) return "Please index a site to start chatting.";
+    return "Ask a question about the indexed website(s)...";
+  }, [indexing.status, sites.length]);
 
-    return "Ask a question about the indexed website...";
-  }, [indexing.status]);
+  const handleAddSite = async () => {
+    if (!url || indexMutation.isPending) return;
 
-  const handleCrawl = async () => {
-    if (!url || crawlMutation.isPending) return;
-
-    setMessages([]);
-    setSiteId("");
-
-    setIndexing({
-      status: "running",
-      progress: 0,
-    });
+    setIndexing({ status: "running", progress: 0 });
 
     try {
-      const result = await crawlMutation.mutateAsync({ url });
-      const crawledSiteId = result?.data?.site?.id || "";
-
-      if (crawledSiteId) {
-        setSiteId(crawledSiteId);
-      }
-
-      setIndexing({
-        status: "ready",
-        progress: 100,
-      });
+      await indexMutation.mutateAsync({ url });
+      queryClient.invalidateQueries(["sites"]);
+      setIndexing({ status: "ready", progress: 100 });
+      setUrl("");
     } catch {
-      setIndexing({
-        status: "idle",
-        progress: 0,
-      });
+      setIndexing({ status: "idle", progress: 0 });
+    }
+  };
+
+  const handleRemoveSite = async (siteUrl) => {
+    if (removeMutation.isPending) return;
+    try {
+      await removeMutation.mutateAsync({ url: siteUrl });
+      queryClient.invalidateQueries(["sites"]);
+    } catch (error) {
+      console.error("Failed to remove site:", error);
     }
   };
 
   const handleSend = async () => {
     const text = input.trim();
+    if (!text || indexing.status === "running" || sites.length === 0) return;
 
-    if (!text || indexing.status === "running" || !siteId) return;
-
-    const userMsg = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text,
-    };
-
+    const userMsg = { id: crypto.randomUUID(), role: "user", text };
     const assistantId = crypto.randomUUID();
 
     setMessages((prev) => [
@@ -117,62 +109,38 @@ export default function ChattingPage() {
     setThinking(true);
 
     try {
-      const response = await chatMutation.mutateAsync({
+      const siteIds = sites.map((s) => s.id);
+      await chatMutation.mutateAsync({
         message: text,
-        siteId,
+        siteIds,
         onChunk: (_chunk, fullText) => {
           setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId
-                ? {
-                    ...message,
-                    text: fullText,
-                    streaming: true,
-                  }
-                : message,
-            ),
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, text: fullText, streaming: true } : m
+            )
           );
         },
         onSources: (sources) => {
           setMessages((prev) =>
-            prev.map((message) =>
-              message.id === assistantId
-                ? {
-                    ...message,
-                    sources,
-                    streaming: false,
-                  }
-                : message,
-            ),
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, sources, streaming: false } : m
+            )
           );
         },
       });
-
+    } catch (err) {
+        console.error(err)
       setMessages((prev) =>
-        prev.map((message) =>
-          message.id === assistantId
+        prev.map((m) =>
+          m.id === assistantId
             ? {
-                ...message,
-                text: response.text,
-                sources: response.sources,
-                streaming: false,
-              }
-            : message,
-        ),
-      );
-    } catch {
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === assistantId
-            ? {
-                ...message,
-                text:
-                  "I couldn't get a response from the backend. Please try again.",
+                ...m,
+                text: "I couldn't get a response from the backend. Please try again.",
                 sources: [],
                 streaming: false,
               }
-            : message,
-        ),
+            : m
+        )
       );
     } finally {
       setThinking(false);
@@ -190,11 +158,13 @@ export default function ChattingPage() {
       <Header onNewChat={handleNewChat} />
 
       <main className="relative flex min-h-0 flex-1 flex-col">
-        <CrawlBar
+        <SiteManager
+          sites={sites}
           url={url}
           setUrl={setUrl}
           indexing={indexing}
-          onCrawl={handleCrawl}
+          onAddSite={handleAddSite}
+          onRemoveSite={handleRemoveSite}
         />
 
         <ChatWindow
@@ -210,8 +180,8 @@ export default function ChattingPage() {
           disabled={
             indexing.status === "running" ||
             thinking ||
-              chatMutation.isPending ||
-              !siteId
+            chatMutation.isPending ||
+            sites.length === 0
           }
           placeholder={inputPlaceholder}
         />

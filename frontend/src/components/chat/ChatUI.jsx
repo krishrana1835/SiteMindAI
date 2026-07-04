@@ -11,6 +11,7 @@ import {
   Plus,
   Hexagon,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 
 const STAGE_ICONS = {
@@ -44,7 +45,7 @@ export function Header({ onNewChat }) {
         </h1>
       </div>
       <span className="hidden rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] uppercase tracking-wide text-slate-500 sm:inline-block">
-        Single-Domain Ingestion
+        Multi-Domain Ingestion
       </span>
       <button
         onClick={onNewChat}
@@ -57,9 +58,15 @@ export function Header({ onNewChat }) {
   );
 }
 
-export function CrawlBar({ url, setUrl, indexing, onCrawl }) {
+export function SiteManager({
+  sites,
+  onAddSite,
+  onRemoveSite,
+  url,
+  setUrl,
+  indexing,
+}) {
   const isRunning = indexing.status === "running";
-  const isReady = indexing.status === "ready";
 
   return (
     <div className="shrink-0 border-b border-slate-200 bg-white p-4">
@@ -74,33 +81,52 @@ export function CrawlBar({ url, setUrl, indexing, onCrawl }) {
             className="flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-[14px] placeholder:text-slate-400 focus:border-black focus:outline-none focus:ring-1 focus:ring-black disabled:bg-slate-50 disabled:text-slate-400"
           />
           <button
-            onClick={onCrawl}
+            onClick={onAddSite}
             disabled={isRunning || !url}
             className="flex shrink-0 items-center gap-2 rounded bg-black px-4 py-2 font-mono text-[13px] text-white transition-colors hover:bg-black/85 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             {isRunning ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Globe2 className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
             )}
             <span className="hidden sm:inline">
-              {isRunning ? "Indexing…" : "Crawl"}
+              {isRunning ? "Indexing…" : "Add Index"}
             </span>
             <span className="sm:hidden">{isRunning ? "…" : "Index"}</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wide text-slate-500">
-          <StatusDot active={isRunning} />
-          <span>
-            {isRunning
-              ? indexing.stage?.label ?? "Working…"
-              : isReady
-                ? "Index ready"
-                : "Idle"}
-          </span>
-          {isReady && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-black" />}
-        </div>
+        {sites && sites.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h3 className="text-[11px] font-mono uppercase tracking-wide text-slate-500">
+              Indexed Sites
+            </h3>
+            <ul className="flex flex-wrap gap-2">
+              {sites.map((site) => (
+                <li
+                  key={site.id}
+                  className="flex items-center gap-2 rounded bg-slate-100 px-2 py-1"
+                >
+                  <a
+                    href={site.originalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-[12px] text-slate-700 hover:underline"
+                  >
+                    {site.title || site.originalUrl}
+                  </a>
+                  <button
+                    onClick={() => onRemoveSite(site.originalUrl)}
+                    className="text-slate-500 hover:text-red-500"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

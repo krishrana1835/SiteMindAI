@@ -5,8 +5,8 @@ import { vectorStoreService } from '../storage/vectorStore.js';
 import { cosineSimilarity } from '../utils/cosineSimilarity.js';
 import { siteStore } from '../storage/siteStore.js';
 
-export async function streamRagResponse(userQuery, siteId, res) {
-    console.log(`Received query: "${userQuery}" for site: ${siteId}`);
+export async function streamRagResponse(userQuery, siteIds, res) {
+    console.log(`Received query: "${userQuery}" for sites: ${siteIds}`);
 
     // --- SSE headers: must be set before any writes ---
     res.setHeader('Content-Type', 'text/event-stream');
@@ -19,13 +19,11 @@ export async function streamRagResponse(userQuery, siteId, res) {
         const queryVector = await generateEmbedding(userQuery);
 
         // Step 7: Search Only the Current Website
-        const siteChunks = vectorStoreService.getChunks(siteId);
-        console.log(`Found ${siteChunks.length} chunks for site: ${siteId}`);
+        const siteChunks = vectorStoreService.getChunks(siteIds);
+        console.log(`Found ${siteChunks.length} chunks for sites: ${siteIds}`);
 
         if (!siteChunks || siteChunks.length === 0) {
-            const site = siteStore.getSite(siteId);
-            const siteUrl = site ? site.originalUrl : 'the specified site';
-            const message = `No content has been indexed for ${siteUrl}. Please crawl the site first.`;
+            const message = `No content has been indexed for the specified sites. Please crawl the sites first.`;
             console.error(message);
             res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
             return res.end();
@@ -37,20 +35,21 @@ export async function streamRagResponse(userQuery, siteId, res) {
         }));
 
         scoredChunks.sort((a, b) => b.score - a.score);
-        const topChunks = scoredChunks.slice(0, 3);
+        const topChunks = scoredChunks.slice(0, 5);
 
         const sources = [...new Set(topChunks.map(c => c.metadata.originalUrl))];
 
         const contextText = topChunks
-            .map(c => `[Source: ${c.metadata.originalUrl}]${c.text}`)
-            .join("\n\n");
+            .map(c => `[Source: ${c.metadata.originalUrl}] ${c.text}`)
+            .join("\n\n---\n\n");
 
+        const sitesString = sources.join(', ');
         const prompt = `
-    You are a helpful assistant for the website: ${sources[0] || ''}. 
+    You are a helpful assistant for the websites: ${sitesString}. 
     Answer the user's question strictly using the provided context below.
-    If the context does not contain the answer, say "I cannot find the answer on this website."
+    If the context does not contain the answer, say "I cannot find the answer on the provided websites."
     Do not mention the user's question in your answer.
-    Never search across chunks belonging to unrelated websites.
+    Your answer should be based solely on the information from the following sources.
     
     Context:
     ${contextText}
@@ -65,12 +64,13 @@ export async function streamRagResponse(userQuery, siteId, res) {
 
         // Stream the text response
         let hasSentData = false;
+        let fullText = "";
         for await (const textPart of textStream) {
-            console.log("Text part streamed:", textPart);
+            fullText += textPart;
             res.write(`data: ${JSON.stringify({ text: textPart })}\n\n`);
             hasSentData = true;
         }
-
+        
         if (!hasSentData) {
             console.log("No data was streamed from the AI model.");
         }

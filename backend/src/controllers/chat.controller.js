@@ -3,14 +3,10 @@ import ApiError from '../utils/api.error.js';
 
 export async function chat(req, res) {
     try {
-        const { message, siteId } = req.body;
+        const { message, siteIds } = req.body;
         
         if (!message) {
             const error = new ApiError(400, "Message is required");
-            return res.status(error.statusCode).json(error);
-        }
-        if (!siteId) {
-            const error = new ApiError(400, "siteId is required to identify the chat context");
             return res.status(error.statusCode).json(error);
         }
 
@@ -18,7 +14,7 @@ export async function chat(req, res) {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        await streamRagResponse(message, siteId, res);
+        await streamRagResponse(message, siteIds || null, res);
 
     } catch (error) {
         console.error("Chat Error:", error);

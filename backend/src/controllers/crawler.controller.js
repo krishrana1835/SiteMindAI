@@ -1,4 +1,4 @@
-import { indexWebsite } from '../services/crawler.service.js';
+import { indexWebsite, removeSiteFromIndex, getAllIndexedSites } from '../services/crawler.service.js';
 import ApiError from '../utils/api.error.js';
 import ApiResponse from '../utils/api.response.js';
 
@@ -31,6 +31,40 @@ export async function crawl(req, res) {
     } catch (err) {
         console.error("Crawling Error:", err);
         const error = new ApiError(500, "Failed to process website content", [err.message]);
+        res.status(error.statusCode).json(error);
+    }
+}
+
+export async function removeSite(req, res) {
+    try {
+        const { url } = req.body;
+        
+        if (!url) {
+            const error = new ApiError(400, "Target URL is required");
+            return res.status(error.statusCode).json(error);
+        }
+
+        const result = await removeSiteFromIndex(url);
+
+        const response = new ApiResponse(200, result, result.message);
+        
+        res.status(response.statusCode).json(response);
+
+    } catch (err) {
+        console.error("Removal Error:", err);
+        const error = new ApiError(500, "Failed to remove website", [err.message]);
+        res.status(error.statusCode).json(error);
+    }
+}
+
+export function getSites(req, res) {
+    try {
+        const sites = getAllIndexedSites();
+        const response = new ApiResponse(200, sites, "Successfully retrieved indexed sites.");
+        res.status(response.statusCode).json(response);
+    } catch (err) {
+        console.error("Get Sites Error:", err);
+        const error = new ApiError(500, "Failed to retrieve indexed sites", [err.message]);
         res.status(error.statusCode).json(error);
     }
 }

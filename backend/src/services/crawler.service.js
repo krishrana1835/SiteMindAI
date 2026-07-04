@@ -114,3 +114,24 @@ export async function indexWebsite(originalUrl, force = false) {
         throw error;
     }
 }
+
+export async function removeSiteFromIndex(url) {
+    const normalizedUrl = normalizeUrl(url);
+    if (!normalizedUrl) {
+        throw new Error('Invalid URL provided.');
+    }
+
+    const existingSite = siteStore.getSite(normalizedUrl);
+
+    if (existingSite) {
+        vectorStoreService.deleteChunks(existingSite.id);
+        siteStore.removeSite(normalizedUrl);
+        return { message: 'Site removed successfully.' };
+    } else {
+        return { message: 'Site not found.' };
+    }
+}
+
+export function getAllIndexedSites() {
+    return siteStore.findAllSites();
+}
