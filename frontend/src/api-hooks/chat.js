@@ -86,7 +86,7 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
 export const useChat = () => {
   return useMutation({
     mutationFn: async ({ message, siteId, onChunk, onSources }) => {
-      const response = await fetch(`${api.defaults.baseURL}/chat`, {
+      const response = await fetch(`${api.defaults.baseURL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

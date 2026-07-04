@@ -1,7 +1,12 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const axiosInstance = axios.create();
+const axiosInstance = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL+'/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 axiosInstance.interceptors.response.use(
   (response) => {
