@@ -1,5 +1,4 @@
 import { useMutation } from '@tanstack/react-query';
-import api from '../utils/api';
 
 async function readSseResponse(response, { onChunk, onSources } = {}) {
   if (!response.ok) {
@@ -86,7 +85,7 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
 export const useChat = () => {
   return useMutation({
     mutationFn: async ({ message, siteId, onChunk, onSources }) => {
-      const response = await fetch(`${api.defaults.baseURL}/api/chat`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

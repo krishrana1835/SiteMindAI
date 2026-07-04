@@ -1,14 +1,14 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-const axiosInstance = axios.create({
+const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL+'/api',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-axiosInstance.interceptors.response.use(
+api.interceptors.response.use(
   (response) => {
     if (response.data && response.data.success === false) {
       toast.error(response.data.message || 'An unexpected error occurred.');
@@ -28,4 +28,4 @@ axiosInstance.interceptors.response.use(
   }
 );
 
-export default axiosInstance;
+export default api;
