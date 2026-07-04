@@ -16,6 +16,7 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
   let buffer = '';
   let text = '';
   let sources = [];
+  let streamError = null;
 
   const handlePayload = (payload) => {
     if (payload.text) {
@@ -33,7 +34,10 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
     }
 
     if (payload.error) {
-      throw new Error(payload.error.message || 'Chat request failed');
+      streamError =
+        typeof payload.error === 'string'
+          ? payload.error
+          : payload.error.message || 'Chat request failed';
     }
   };
 
@@ -53,9 +57,9 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
         continue;
       }
 
-      const rawData = dataLine.replace(/^data:\s*/, '');
+      const rawData = dataLine.replace(/^data:\s*/, '').trim();
 
-      if (!rawData) {
+      if (!rawData || rawData === '[DONE]') {
         continue;
       }
 
@@ -63,7 +67,7 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
         const payload = JSON.parse(rawData);
         handlePayload(payload);
       } catch (error) {
-        throw new Error('Failed to parse chat stream response');
+        console.warn('Failed to parse SSE payload:', rawData, error);
       }
     }
 
@@ -72,18 +76,22 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
     }
   }
 
+  if (streamError) {
+    throw new Error(streamError);
+  }
+
   return { text, sources };
 }
 
 export const useChat = () => {
   return useMutation({
-    mutationFn: async ({ message, onChunk, onSources }) => {
+    mutationFn: async ({ message, siteId, onChunk, onSources }) => {
       const response = await fetch(`${api.defaults.baseURL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, siteId }),
       });
 
       return readSseResponse(response, { onChunk, onSources });

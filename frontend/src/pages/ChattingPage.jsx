@@ -9,7 +9,8 @@ import { useChat } from "../api-hooks/chat";
 import { useCrawl } from "../api-hooks/crawl";
 
 export default function ChattingPage() {
-  const [url, setUrl] = useState("https://example.com");
+  const [url, setUrl] = useState("https://example.com");  
+  const [siteId, setSiteId] = useState("");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -60,6 +61,7 @@ export default function ChattingPage() {
     if (!url || crawlMutation.isPending) return;
 
     setMessages([]);
+    setSiteId("");
 
     setIndexing({
       status: "running",
@@ -67,7 +69,12 @@ export default function ChattingPage() {
     });
 
     try {
-      await crawlMutation.mutateAsync({ url });
+      const result = await crawlMutation.mutateAsync({ url });
+      const crawledSiteId = result?.data?.site?.id || "";
+
+      if (crawledSiteId) {
+        setSiteId(crawledSiteId);
+      }
 
       setIndexing({
         status: "ready",
@@ -84,7 +91,7 @@ export default function ChattingPage() {
   const handleSend = async () => {
     const text = input.trim();
 
-    if (!text || indexing.status === "running") return;
+    if (!text || indexing.status === "running" || !siteId) return;
 
     const userMsg = {
       id: crypto.randomUUID(),
@@ -112,6 +119,7 @@ export default function ChattingPage() {
     try {
       const response = await chatMutation.mutateAsync({
         message: text,
+        siteId,
         onChunk: (_chunk, fullText) => {
           setMessages((prev) =>
             prev.map((message) =>
@@ -202,7 +210,8 @@ export default function ChattingPage() {
           disabled={
             indexing.status === "running" ||
             thinking ||
-            chatMutation.isPending
+              chatMutation.isPending ||
+              !siteId
           }
           placeholder={inputPlaceholder}
         />
