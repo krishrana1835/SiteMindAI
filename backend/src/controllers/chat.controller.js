@@ -1,18 +1,24 @@
 import { streamRagResponse } from '../services/chat.service.js';
+import ApiError from '../utils/api.error.js';
 
 export async function chat(req, res) {
     try {
-        const { message } = req.body;
+        const { message, siteId } = req.body;
         
         if (!message) {
-            return res.status(400).json({ error: "Message is required" });
+            const error = new ApiError(400, "Message is required");
+            return res.status(error.statusCode).json(error);
+        }
+        if (!siteId) {
+            const error = new ApiError(400, "siteId is required to identify the chat context");
+            return res.status(error.statusCode).json(error);
         }
 
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        await streamRagResponse(message, res);
+        await streamRagResponse(message, siteId, res);
 
     } catch (error) {
         console.error("Chat Error:", error);
@@ -31,7 +37,14 @@ export async function chat(req, res) {
             message: errorMessage
         };
 
-        res.write(`data: ${JSON.stringify({ error: errorPayload })}\n\n`);
+        // Ensure headers are set before sending error for event-stream
+        if (!res.headersSent) {
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Connection', 'keep-alive');
+        }
+        
+        res.write(`data: ${JSON.stringify({ error: errorPayload })}`);
         res.end();
     }
 }
