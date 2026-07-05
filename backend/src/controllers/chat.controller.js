@@ -4,6 +4,14 @@ import ApiError from '../utils/api.error.js';
 export async function chat(req, res) {
     try {
         const { message, siteIds } = req.body;
+        const sessionId = req.headers['x-session-id'];
+
+        console.log(`Received chat request: sessionId=${sessionId}, message=${message}, siteIds=${siteIds}`);
+
+        if (!sessionId) {
+            const error = new ApiError(400, "Session ID is required");
+            return res.status(error.statusCode).json(error);
+        }
         
         if (!message) {
             const error = new ApiError(400, "Message is required");
@@ -14,7 +22,7 @@ export async function chat(req, res) {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        await streamRagResponse(message, siteIds || null, res);
+        await streamRagResponse(sessionId, message, siteIds || null, res);
 
     } catch (error) {
         console.error("Chat Error:", error);

@@ -85,11 +85,17 @@ async function readSseResponse(response, { onChunk, onSources } = {}) {
 export const useChat = () => {
   return useMutation({
     mutationFn: async ({ message, siteIds, onChunk, onSources }) => {
+      const sessionId = localStorage.getItem('sessionId');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      if (sessionId) {
+        headers['x-session-id'] = sessionId;
+      }
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({ message, siteIds }),
       });
 

@@ -5,8 +5,7 @@ import { vectorStoreService } from '../storage/vectorStore.js';
 import { cosineSimilarity } from '../utils/cosineSimilarity.js';
 import { siteStore } from '../storage/siteStore.js';
 
-export async function streamRagResponse(userQuery, siteIds, res) {
-    console.log(`Received query: "${userQuery}" for sites: ${siteIds}`);
+export async function streamRagResponse(sessionId, userQuery, siteIds, res) {
 
     // --- SSE headers: must be set before any writes ---
     res.setHeader('Content-Type', 'text/event-stream');
@@ -18,9 +17,7 @@ export async function streamRagResponse(userQuery, siteIds, res) {
     try {
         const queryVector = await generateEmbedding(userQuery);
 
-        // Step 7: Search Only the Current Website
-        const siteChunks = vectorStoreService.getChunks(siteIds);
-        console.log(`Found ${siteChunks.length} chunks for sites: ${siteIds}`);
+        const siteChunks = vectorStoreService.getChunks(sessionId, siteIds);
 
         if (!siteChunks || siteChunks.length === 0) {
             const message = `No content has been indexed for the specified sites. Please crawl the sites first.`;

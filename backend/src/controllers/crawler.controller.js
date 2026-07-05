@@ -5,13 +5,19 @@ import ApiResponse from '../utils/api.response.js';
 export async function crawl(req, res) {
     try {
         const { url, force } = req.body;
+        const sessionId = req.headers['x-session-id'];
+
+        if (!sessionId) {
+            const error = new ApiError(400, "Session ID is required");
+            return res.status(error.statusCode).json(error);
+        }
         
         if (!url) {
             const error = new ApiError(400, "Target URL is required");
             return res.status(error.statusCode).json(error);
         }
 
-        const result = await indexWebsite(url, force);
+        const result = await indexWebsite(sessionId, url, force);
 
         console.log(`Indexing request for ${url}: ${result.message} (From Cache: ${result.fromCache}, In Progress: ${result.inProgress})`);
 
@@ -22,7 +28,6 @@ export async function crawl(req, res) {
             inProgress: result.inProgress,
         };
         
-        // Use 202 Accepted if indexing is in progress, 200 OK otherwise
         const statusCode = result.inProgress ? 202 : 200;
         const response = new ApiResponse(statusCode, responseData, result.message);
         
@@ -38,13 +43,19 @@ export async function crawl(req, res) {
 export async function removeSite(req, res) {
     try {
         const { url } = req.body;
-        
+        const sessionId = req.headers['x-session-id'];
+
+        if (!sessionId) {
+            const error = new ApiError(400, "Session ID is required");
+            return res.status(error.statusCode).json(error);
+        }
+
         if (!url) {
             const error = new ApiError(400, "Target URL is required");
             return res.status(error.statusCode).json(error);
         }
 
-        const result = await removeSiteFromIndex(url);
+        const result = await removeSiteFromIndex(sessionId, url);
 
         const response = new ApiResponse(200, result, result.message);
         
@@ -59,7 +70,14 @@ export async function removeSite(req, res) {
 
 export function getSites(req, res) {
     try {
-        const sites = getAllIndexedSites();
+        const sessionId = req.headers['x-session-id'];
+
+        if (!sessionId) {
+            const error = new ApiError(400, "Session ID is required");
+            return res.status(error.statusCode).json(error);
+        }
+
+        const sites = getAllIndexedSites(sessionId);
         const response = new ApiResponse(200, sites, "Successfully retrieved indexed sites.");
         res.status(response.statusCode).json(response);
     } catch (err) {

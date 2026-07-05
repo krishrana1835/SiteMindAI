@@ -1,13 +1,21 @@
-// In-memory store for vector chunks, grouped by siteId
-const vectorStore = new Map();
+// In-memory store for vector chunks, scoped by session
+const sessionVectorStores = new Map();
+
+function getSessionStore(sessionId) {
+    if (!sessionVectorStores.has(sessionId)) {
+        sessionVectorStores.set(sessionId, new Map());
+    }
+    return sessionVectorStores.get(sessionId);
+}
 
 /**
- * Saves chunks for a specific site.
+ * Saves chunks for a specific site within a session.
+ * @param {string} sessionId - The session ID.
  * @param {string} siteId - The ID of the site.
  * @param {Array<object>} chunks - An array of chunk objects to save.
- * Each chunk should contain: siteId, text, embedding, metadata.
  */
-function saveChunks(siteId, chunks) {
+function saveChunks(sessionId, siteId, chunks) {
+  const vectorStore = getSessionStore(sessionId);
   if (!vectorStore.has(siteId)) {
     vectorStore.set(siteId, []);
   }
@@ -16,12 +24,15 @@ function saveChunks(siteId, chunks) {
 }
 
 /**
- * Retrieves all chunks for a specific site.
- * @param {string} siteId - The ID of the site.
- * @returns {Array<object>} An array of chunks for the site, or an empty array if not found.
+ * Retrieves chunks for one or more sites within a session.
+ * @param {string} sessionId - The session ID.
+ * @param {string|string[]} [siteIds] - A single site ID, an array of site IDs, or undefined to get all chunks for the session.
+ * @returns {Array<object>} An array of chunks.
  */
-function getChunks(siteIds) {
-  if (!siteIds) { // if no siteIds are passed, return all chunks from all sites
+function getChunks(sessionId, siteIds) {
+  const vectorStore = getSessionStore(sessionId);
+
+  if (!siteIds) { // if no siteIds are passed, return all chunks from all sites in the session
     const allChunks = [];
     for (const chunks of vectorStore.values()) {
         allChunks.push(...chunks);
@@ -37,15 +48,17 @@ function getChunks(siteIds) {
     return combinedChunks;
   }
   
-  return vectorStore.get(siteIds) || []; // For backward compatibility, if a single siteId string is passed
+  return vectorStore.get(siteIds) || []; // For backward compatibility
 }
 
 /**
- * Deletes all chunks for a specific site.
+ * Deletes all chunks for a specific site within a session.
+ * @param {string} sessionId - The session ID.
  * @param {string} siteId - The ID of the site.
  * @returns {boolean} True if the chunks were deleted, false otherwise.
  */
-function deleteChunks(siteId) {
+function deleteChunks(sessionId, siteId) {
+  const vectorStore = getSessionStore(sessionId);
   return vectorStore.delete(siteId);
 }
 

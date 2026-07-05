@@ -49,40 +49,35 @@ async function crawlAndChunk(url) {
     return { rawChunks, title };
 }
 
-export async function indexWebsite(originalUrl, force = false) {
+export async function indexWebsite(sessionId, originalUrl, force = false) {
     const normalizedUrl = normalizeUrl(originalUrl);
     if (!normalizedUrl) {
         throw new Error('Invalid URL provided.');
     }
 
-    const existingSite = siteStore.getSite(normalizedUrl);
+    const existingSite = siteStore.getSite(sessionId, normalizedUrl);
 
-    // Step 9: Support Force Reindex
     if (force && existingSite) {
-        await vectorStoreService.deleteChunks(existingSite.id);
-        siteStore.removeSite(normalizedUrl);
+        vectorStoreService.deleteChunks(sessionId, existingSite.id);
+        siteStore.removeSite(sessionId, normalizedUrl);
     } else {
-        // Step 4 & 8: Check Cache and Expiration
         if (existingSite) {
             if (existingSite.status === 'ready') {
                 const age = Date.now() - new Date(existingSite.indexedAt).getTime();
                 if (age < TTL) {
                     return { message: 'Site is already indexed and cache is fresh.', site: existingSite, fromCache: true };
                 }
-            }
-            // Step 6: Prevent Duplicate Crawls
-            else if (existingSite.status === 'indexing') {
+            } else if (existingSite.status === 'indexing') {
                 return { message: 'Indexing is already in progress for this site.', site: existingSite, inProgress: true };
             }
         }
     }
 
-    // Step 5 & 6: Save Site Metadata and set status to "indexing"
-    let site = siteStore.getSite(normalizedUrl);
+    let site = siteStore.getSite(sessionId, normalizedUrl);
     if (!site) {
-        site = siteStore.addSite(originalUrl, normalizedUrl);
+        site = siteStore.addSite(sessionId, originalUrl, normalizedUrl);
     } else {
-        siteStore.updateSite(normalizedUrl, { status: 'indexing' });
+        siteStore.updateSite(sessionId, normalizedUrl, { status: 'indexing' });
     }
 
     try {
@@ -94,11 +89,9 @@ export async function indexWebsite(originalUrl, force = false) {
             processedChunks.push({ siteId: site.id, text, embedding, metadata: { originalUrl } });
         }
 
-        // Step 3: Group Vector Data by Website
-        vectorStoreService.saveChunks(site.id, processedChunks);
+        vectorStoreService.saveChunks(sessionId, site.id, processedChunks);
         
-        // Step 5: Update site metadata after successful indexing
-        const updatedSite = siteStore.updateSite(normalizedUrl, {
+        const updatedSite = siteStore.updateSite(sessionId, normalizedUrl, {
             status: 'ready',
             indexedAt: new Date(),
             chunkCount: processedChunks.length,
@@ -108,30 +101,29 @@ export async function indexWebsite(originalUrl, force = false) {
         return { message: 'Website indexed successfully.', site: updatedSite, fromCache: false };
 
     } catch (error) {
-        // Handle failed indexing
-        siteStore.updateSite(normalizedUrl, { status: 'failed' });
+        siteStore.updateSite(sessionId, normalizedUrl, { status: 'failed' });
         console.error('Indexing failed for:', originalUrl, error);
         throw error;
     }
 }
 
-export async function removeSiteFromIndex(url) {
+export async function removeSiteFromIndex(sessionId, url) {
     const normalizedUrl = normalizeUrl(url);
     if (!normalizedUrl) {
         throw new Error('Invalid URL provided.');
     }
 
-    const existingSite = siteStore.getSite(normalizedUrl);
+    const existingSite = siteStore.getSite(sessionId, normalizedUrl);
 
     if (existingSite) {
-        vectorStoreService.deleteChunks(existingSite.id);
-        siteStore.removeSite(normalizedUrl);
+        vectorStoreService.deleteChunks(sessionId, existingSite.id);
+        siteStore.removeSite(sessionId, normalizedUrl);
         return { message: 'Site removed successfully.' };
     } else {
         return { message: 'Site not found.' };
     }
 }
 
-export function getAllIndexedSites() {
-    return siteStore.findAllSites();
+export function getAllIndexedSites(sessionId) {
+    return siteStore.findAllSites(sessionId);
 }

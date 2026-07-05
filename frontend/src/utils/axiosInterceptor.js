@@ -8,6 +8,21 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use(
+  (config) => {
+    let sessionId = localStorage.getItem('sessionId');
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem('sessionId', sessionId);
+    }
+    config.headers['x-session-id'] = sessionId;
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 api.interceptors.response.use(
   (response) => {
     if (response.data && response.data.success === false) {
